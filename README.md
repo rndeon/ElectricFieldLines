@@ -16,4 +16,4 @@ Usage:
     * The angles at which these start currently set by the `angleresolution` global variable
  5. **Clear Screen** deletes everything placed.
 
-Runs on Python with pygame, and is my first python project. A lot of StackOverflow in this one.
+Runs on Python 3.5 with pygame, and is my first python project. A lot of StackOverflow in this one.
