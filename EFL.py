@@ -16,9 +16,11 @@ k=1
 angleresolution=60
 spaceresolution=1
 screen = pygame.display.set_mode((display_width,display_height))
-background = pygame.Surface((display_width,display_height -Hudsize))
-background = background.convert()
-background.fill((255, 245, 210))
+screen.fill((255, 245, 210))
+EFLsurface = pygame.Surface((display_width, display_height - Hudsize))
+EFLsurface = EFLsurface.convert()
+EFLsurface.fill((255, 245, 210))
+EFLsurface.set_colorkey((255, 245, 210))
 HUD = pygame.Surface((display_width,Hudsize))
 HUD.fill((200, 245, 210))
 
@@ -66,6 +68,21 @@ class PointCharge(object):
 
     def isClickedOn(self,position):
         return position.isBetween(self.position - (self.size /2), self.position + (self.size /2))
+
+class DielectricRegion(object):
+    def __init__(self, rect, permittivity=1):
+        self.rect=rect #just rectangle regions for now, might get more ambitious later
+        self.set_perm(permittivity)
+
+    def isInsideRegion(self,point):
+        return self.rect.collidepoint(point[0], point[1])
+
+    def set_perm(self,permittivity):
+        if permittivity > 0:
+            self.permittivity = permittivity
+            self.k = 1 / self.permittivity
+
+
 def degreesToRadians(deg):
     return deg/180.0 * math.pi
 
@@ -77,6 +94,13 @@ def text_objects(text, font, colour):
     textSurface = font.render(text, True, colour)
     return textSurface, textSurface.get_rect()
 
+def display_at_mouse(msg):
+    smallText = pygame.font.SysFont("couriernew", 15)
+    # textSurf = smallText.render(str(curr_int.newCharge), True, black)
+    textSurf, textRect = text_objects(msg, smallText, black)
+    # textRect = textSurf.get_rect()
+    textRect.bottomleft = curr_int.mousePoint
+    screen.blit(textSurf, textRect)
 #maybe useful later -
 def message_display(text,position):
     largeText = pygame.font.Font('freesansbold.ttf',25)
@@ -165,19 +189,19 @@ def getUphillPointAlongEFLUsingField(pointcharges, testpoint):
     return Position(nextPoint)
 #this function gets the whole EFL in one shot, which can be annoyingly slow in a interactive program
 def traceEFL(elf):
-    while elf[-1].isBetween(background.get_abs_offset(), background.get_size()) and not isOnAnyPointCharges(elf[-1],
-                                                                                                    pointCharges):
+    while elf[-1].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(elf[-1],
+                                                                                                            pointCharges):
         elf.append(getNextPointAlongEFLUsingField(pointCharges, elf[-1]))
         # print("next point is: %s" % (elf[-1],) )
     ##follow ELF backwards until it hits a charge or leaves the screen
-    while elf[0].isBetween(background.get_abs_offset(), background.get_size()) and not isOnAnyPointCharges(elf[0],
-                                                                                                   pointCharges):
+    while elf[0].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(elf[0],
+                                                                                                           pointCharges):
         elf.insert(0, getUphillPointAlongEFLUsingField(pointCharges, elf[0]))
         # print("next point is: %s" % (elf[0],))
 #so this function just adds one point on either end of an existing field line, so it can be called intermittently
 def nextEFLPoints(efl):
     newpoints = [False, False]
-    if efl[-1].isBetween(background.get_abs_offset(), background.get_size()) and not isOnAnyPointCharges(efl[-1],
+    if efl[-1].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(efl[-1],
                                                                                                          pointCharges):
         efl.append(getNextPointAlongEFLUsingField(pointCharges, efl[-1]))
         if len(efl)>2 and (efl[-1].isCloseEnoughTo(efl[-2], spaceresolution / 10) or efl[-1].isCloseEnoughTo(efl[-3], spaceresolution / 10)):
@@ -186,7 +210,7 @@ def nextEFLPoints(efl):
         else:
             newpoints[1] = True
 
-    if efl[0].isBetween(background.get_abs_offset(), background.get_size()) and not isOnAnyPointCharges(efl[0],
+    if efl[0].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(efl[0],
                                                                                                         pointCharges):
         efl.insert(0, getUphillPointAlongEFLUsingField(pointCharges, efl[0]))
         #print(" %s" % (elf[0], ))
@@ -201,6 +225,12 @@ def isOnAnyPointCharges(point, pointcharges):
     for pointCharge in pointcharges:
         if point.isCloseEnoughTo(pointCharge.position, spaceresolution):
             return True
+
+def isInAnyRegion(point,regions, action=lambda region: print("region: %s" % region.permittivity)):
+    for region in regions:
+        if region.isInsideRegion(point):
+            action(region)
+            break
 
 def autoStartEFLs():
     global efls
@@ -258,9 +288,9 @@ class Button:
 
 def clearEFLs():
     global efls
-    global background
+    global EFLsurface
     efls = []
-    background.fill((255, 245, 210))
+    EFLsurface.fill((255, 245, 210))
     return True
 
 def clearCharges():
@@ -273,8 +303,10 @@ class MouseInteractor:
         self.currentMode= ClickModes.addCharge
         self.mousePoint = Position((0, 0))
         self.prevMousePoint = Position((0, 0))
-        self.mouseClick = Position((0, 0))
-        self.prevMouseClick = Position((0, 0))
+        self.mouseUp = Position((0, 0))
+        self.prevMouseUp = Position((0, 0))
+        self.mouseDown = Position((0, 0))
+        self.prevMouseDown = Position((0, 0))
 
         self.newCharge = 0
         self.newDielectric = 1
@@ -321,7 +353,7 @@ yellow=(200,100,0)
 dullyellow=(100,50,0)
 
 pointCharges = [PointCharge(Position((300,300))), PointCharge(Position((300, 400)), -2)] #default to a mild starting configuration
-
+dielectricRegions = [DielectricRegion(screen.get_rect())] # this one is a little tricky.
 # mousePoint=Position((0,0))
 # prevMousePoint=Position((0,0))
 # mouseClick=Position((0,0))
@@ -346,73 +378,76 @@ buttonsize=250
 buttons=[Button("Find Field Line",0,display_height-100,buttonsize,50,green,dullgreen, action=lambda: curr_int.set_mode(ClickModes.fieldline) ),
          Button("Edit Point Charges",0,display_height-50,buttonsize,50,grey,dullgrey, action=lambda: curr_int.set_mode(ClickModes.addCharge)),
          Button("Autostart Lines", display_width - buttonsize, display_height - 100, buttonsize, 50, lightblue, darkblue, action=autoStartEFLs),
-         Button("Edit Dielectric Regions", buttonsize, display_height - 50, buttonsize, 50, lightred, darkred, action=None),
+         Button("Edit Dielectric Regions", buttonsize, display_height - 50, buttonsize, 50, lightred, darkred, action=lambda: curr_int.set_mode(ClickModes.dielectric)),
          Button("Clear Screen", display_width - buttonsize, display_height - 50, buttonsize, 50, yellow, dullyellow,
                 action=lambda: clearEFLs() and clearCharges())]
 
 
 while True:
+    #pin background colour to the value of its permittivity
+    screen.fill(100 * Position((255, 245, 210)) / (100 + dielectricRegions[-1].permittivity) )
     # Calculate ELFs
     for elf in efls:
         drawnew = nextEFLPoints(elf)
         # Draw ELFs
         if drawnew[0]:
-            pygame.draw.line(background, black, elf[0], elf[0], 1)
+            pygame.draw.line(EFLsurface, black, elf[0], elf[0], 1)
         if drawnew[1]:
-            pygame.draw.line(background, black, elf[-1], elf[-1], 1)
+            pygame.draw.line(EFLsurface, black, elf[-1], elf[-1], 1)
 
     screen.blit(HUD, (0, display_height - Hudsize))
-    screen.blit(background, (0, 0))  # screen.fill((255, 245, 210))
+    screen.blit(EFLsurface, (0, 0))  # screen.fill((255, 245, 210))
 
     #event handling
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit(); sys.exit()
 
-            curr_int.mousePoint = Position(pygame.mouse.get_pos())
-
-
-
         if event.type == pygame.MOUSEBUTTONUP:
-            curr_int.mouseClick = Position(pygame.mouse.get_pos())
+            curr_int.mouseUp = Position(pygame.mouse.get_pos())
             if event.button == 1:
                 buttonclick=False
                 for button in buttons:
-                    if button.click(curr_int.mouseClick):
+                    if button.click(curr_int.mouseUp):
                         buttonclick = True
                 if not buttonclick: #here's where we interact with most of the screen. the `simulation'.
-                    if curr_int.currentMode == ClickModes.fieldline and curr_int.mouseClick != curr_int.prevMouseClick: # start up a field line calc
-                        efls.append([curr_int.mouseClick])
+                    if curr_int.currentMode == ClickModes.fieldline and curr_int.mouseUp != curr_int.prevMouseUp: # start up a field line calc
+                        efls.append([curr_int.mouseUp])
                     if curr_int.currentMode == ClickModes.addCharge and curr_int.newCharge != 0: # add a new charge
-                        pointCharges.append(PointCharge(curr_int.mouseClick, curr_int.newCharge))
+                        pointCharges.append(PointCharge(curr_int.mouseUp, curr_int.newCharge))
                         clearEFLs()
-                curr_int.prevMouseClick = curr_int.mouseClick
+                curr_int.prevMouseUp = curr_int.mouseUp
             elif event.button == 3:
                 if curr_int.currentMode == ClickModes.addCharge: #remove a charge with right click
-                    pointCharges = [x for x in pointCharges if not x.isClickedOn(curr_int.mouseClick)]
+                    pointCharges = [x for x in pointCharges if not x.isClickedOn(curr_int.mouseUp)]
                     clearEFLs()
             elif event.button ==4:
-                curr_int.set_charge(curr_int.newCharge +1)
+                if curr_int.currentMode == ClickModes.addCharge:
+                    curr_int.set_charge(curr_int.newCharge +1)
+                elif curr_int.currentMode == ClickModes.dielectric:
+                    isInAnyRegion(curr_int.mouseUp, dielectricRegions,action=lambda region: region.set_perm(region.permittivity +1))
             elif event.button == 5:
-                curr_int.set_charge(curr_int.newCharge - 1)
-        #elif event.type == pygame.MOUSEMOTION:
+                if curr_int.currentMode == ClickModes.addCharge:
+                    curr_int.set_charge(curr_int.newCharge - 1)
+                elif curr_int.currentMode == ClickModes.dielectric:
+                    isInAnyRegion(curr_int.mouseUp, dielectricRegions,
+                              action=lambda region: region.set_perm(region.permittivity - 1))
+        #elif event.type == pygame.MOUSEBUTTONDOWN:
+
             #nothing
 
     curr_int.mousePoint = Position(pygame.mouse.get_pos())
     if curr_int.currentMode == ClickModes.addCharge: # displays the charge value that will be placed on click, just above the mouse cursor
-        smallText = pygame.font.SysFont("comicsansms", 15)
-        textSurf = smallText.render(str(curr_int.newCharge), True, black)
-        # textSurf, textRect = text_objects(str(self.charge), smallText)
-        textRect = textSurf.get_rect()
-        textRect.bottomleft = curr_int.mousePoint
-        screen.blit(textSurf, textRect)
-    if curr_int.currentMode == ClickModes.fieldline: # continuously displays the field right at the mouse cursor
+        display_at_mouse("q = %s" % str(curr_int.newCharge))
+    elif curr_int.currentMode == ClickModes.fieldline: # continuously displays the field right at the mouse cursor
         # draw gradient indicator arrow
-        curr_int.mousePoint = Position(pygame.mouse.get_pos())
         nextPoint = getNextPointAlongEFLUsingField(pointCharges, curr_int.mousePoint)
         gradientarrowPoint = curr_int.mousePoint + (nextPoint - curr_int.mousePoint) * (
         20 / spaceresolution)  # Position([z * 10 for z in (nextPoint - mousePoint)])
         drawArrow(screen, green, curr_int.mousePoint, gradientarrowPoint, 3)
+    elif curr_int.currentMode == ClickModes.dielectric: # displays the permittivity right at the mouse cursor
+        isInAnyRegion(curr_int.mousePoint,dielectricRegions ,action=lambda region: display_at_mouse("ϵ = %s" % region.permittivity))
+
     # Draw charges
     for pointCharge in pointCharges:
         pointCharge.draw()
