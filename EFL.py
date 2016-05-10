@@ -205,7 +205,7 @@ def isOnAnyPointCharges(point, pointcharges):
 def autoStartEFLs():
     global efls
     global pointCharges
-    clearElfs()
+    clearEFLs()
     for pointCharge in pointCharges:
         for angle in numpy.arange(0, 360, angleresolution):
             efls.append([pointCharge.position + 2 * spaceresolution * Position((math.cos(degreesToRadians(angle)), math.sin(degreesToRadians(angle))))])
@@ -256,7 +256,7 @@ class Button:
         pygame.draw.rect(self.surface, black, (0, 0, self.w, self.h), 1)
         screen.blit(self.surface, self.position)
 
-def clearElfs():
+def clearEFLs():
     global efls
     global background
     efls = []
@@ -267,6 +267,24 @@ def clearCharges():
     global pointCharges
     pointCharges = []
     return True
+
+class MouseInteractor:
+    def __init__(self):
+        self.currentMode= ClickModes.addCharge
+        self.mousePoint = Position((0, 0))
+        self.prevMousePoint = Position((0, 0))
+        self.mouseClick = Position((0, 0))
+        self.prevMouseClick = Position((0, 0))
+
+        self.newCharge = 0
+        self.newDielectric = 1
+    def set_charge(self,value):
+        self.newCharge = value
+
+    def set_mode(self,mode):
+        self.currentMode = mode
+
+
 # #testing my between function
 # print("%s" % (pointCharges[0].position.isBetween((100,300),(400,300) ),))
 # print("%s" % (pointCharges[0].position.isBetween((100,100),(400,400) ),))
@@ -302,35 +320,35 @@ darkred=(100,0,0)
 yellow=(200,100,0)
 dullyellow=(100,50,0)
 
-firstCharge = PointCharge(Position((300,300)))
-pointCharges = [firstCharge, PointCharge(Position((300, 400)), -2)]
+pointCharges = [PointCharge(Position((300,300))), PointCharge(Position((300, 400)), -2)] #default to a mild starting configuration
 
-mousePoint=Position((0,0))
-prevMousePoint=Position((0,0))
-mouseClick=Position((0,0))
-prevMouseClick=Position((0,0))
+# mousePoint=Position((0,0))
+# prevMousePoint=Position((0,0))
+# mouseClick=Position((0,0))
+# prevMouseClick=Position((0,0))
 class ClickModes:
-    addCharge, fieldline = range(2)
+    addCharge, fieldline, dielectric = range(3)
 
 
-currentMode=ClickModes.addCharge
-def set_mode(mode):
-    global currentMode
-    currentMode = mode
+#currentMode=ClickModes.addCharge
+# def set_mode(mode):
+#     global currentMode
+#     currentMode = mode
+#
+# NewCharge=0
+# def set_charge(value):
+#     global NewCharge
+#     NewCharge = value
 
-NewCharge=0
-def set_charge(value):
-    global NewCharge
-    NewCharge = value
-
+curr_int = MouseInteractor()
 efls=[]
 buttonsize=250
-buttons=[Button("Find Field Line",0,display_height-100,buttonsize,50,green,dullgreen, action=lambda: set_mode(ClickModes.fieldline) ),
-         Button("Edit Point Charges",0,display_height-50,buttonsize,50,grey,dullgrey, action=lambda: set_mode(ClickModes.addCharge)),
+buttons=[Button("Find Field Line",0,display_height-100,buttonsize,50,green,dullgreen, action=lambda: curr_int.set_mode(ClickModes.fieldline) ),
+         Button("Edit Point Charges",0,display_height-50,buttonsize,50,grey,dullgrey, action=lambda: curr_int.set_mode(ClickModes.addCharge)),
          Button("Autostart Lines", display_width - buttonsize, display_height - 100, buttonsize, 50, lightblue, darkblue, action=autoStartEFLs),
          Button("Edit Dielectric Regions", buttonsize, display_height - 50, buttonsize, 50, lightred, darkred, action=None),
-         Button("Clear Screen", display_width-buttonsize, display_height - 50, buttonsize, 50, yellow, dullyellow,
-                action=lambda: clearElfs() and clearCharges())]
+         Button("Clear Screen", display_width - buttonsize, display_height - 50, buttonsize, 50, yellow, dullyellow,
+                action=lambda: clearEFLs() and clearCharges())]
 
 
 while True:
@@ -351,50 +369,50 @@ while True:
         if event.type == pygame.QUIT:
             pygame.quit(); sys.exit()
 
-
-        mousePoint = Position(pygame.mouse.get_pos())
+            curr_int.mousePoint = Position(pygame.mouse.get_pos())
 
 
 
         if event.type == pygame.MOUSEBUTTONUP:
-            mouseClick = Position(pygame.mouse.get_pos())
+            curr_int.mouseClick = Position(pygame.mouse.get_pos())
             if event.button == 1:
                 buttonclick=False
                 for button in buttons:
-                    if button.click(mouseClick):
+                    if button.click(curr_int.mouseClick):
                         buttonclick = True
                 if not buttonclick: #here's where we interact with most of the screen. the `simulation'.
-                    if currentMode == ClickModes.fieldline and mouseClick != prevMouseClick: # start up a field line calc
-                        efls.append([mouseClick])
-                    if currentMode == ClickModes.addCharge and NewCharge != 0: # add a new charge
-                        pointCharges.append(PointCharge(mouseClick, NewCharge))
-                        clearElfs()
-                prevMouseClick = mouseClick
+                    if curr_int.currentMode == ClickModes.fieldline and curr_int.mouseClick != curr_int.prevMouseClick: # start up a field line calc
+                        efls.append([curr_int.mouseClick])
+                    if curr_int.currentMode == ClickModes.addCharge and curr_int.newCharge != 0: # add a new charge
+                        pointCharges.append(PointCharge(curr_int.mouseClick, curr_int.newCharge))
+                        clearEFLs()
+                curr_int.prevMouseClick = curr_int.mouseClick
             elif event.button == 3:
-                if currentMode == ClickModes.addCharge: #remove a charge with right click
-                    pointCharges = [x for x in pointCharges if not x.isClickedOn(mouseClick)]
-                    clearElfs()
+                if curr_int.currentMode == ClickModes.addCharge: #remove a charge with right click
+                    pointCharges = [x for x in pointCharges if not x.isClickedOn(curr_int.mouseClick)]
+                    clearEFLs()
             elif event.button ==4:
-                set_charge(NewCharge +1)
+                curr_int.set_charge(curr_int.newCharge +1)
             elif event.button == 5:
-                set_charge(NewCharge - 1)
+                curr_int.set_charge(curr_int.newCharge - 1)
         #elif event.type == pygame.MOUSEMOTION:
             #nothing
-    mousePoint = Position(pygame.mouse.get_pos())
-    if currentMode == ClickModes.addCharge: # displays the charge value that will be placed on click, just above the mouse cursor
+
+    curr_int.mousePoint = Position(pygame.mouse.get_pos())
+    if curr_int.currentMode == ClickModes.addCharge: # displays the charge value that will be placed on click, just above the mouse cursor
         smallText = pygame.font.SysFont("comicsansms", 15)
-        textSurf = smallText.render(str(NewCharge), True, black)
+        textSurf = smallText.render(str(curr_int.newCharge), True, black)
         # textSurf, textRect = text_objects(str(self.charge), smallText)
         textRect = textSurf.get_rect()
-        textRect.bottomleft = mousePoint
+        textRect.bottomleft = curr_int.mousePoint
         screen.blit(textSurf, textRect)
-    if currentMode == ClickModes.fieldline: # continuously displays the field right at the mouse cursor
+    if curr_int.currentMode == ClickModes.fieldline: # continuously displays the field right at the mouse cursor
         # draw gradient indicator arrow
-        mousePoint = Position(pygame.mouse.get_pos())
-        nextPoint = getNextPointAlongEFLUsingField(pointCharges, mousePoint)
-        gradientarrowPoint = mousePoint + (nextPoint - mousePoint) * (
+        curr_int.mousePoint = Position(pygame.mouse.get_pos())
+        nextPoint = getNextPointAlongEFLUsingField(pointCharges, curr_int.mousePoint)
+        gradientarrowPoint = curr_int.mousePoint + (nextPoint - curr_int.mousePoint) * (
         20 / spaceresolution)  # Position([z * 10 for z in (nextPoint - mousePoint)])
-        drawArrow(screen, green, mousePoint, gradientarrowPoint, 3)
+        drawArrow(screen, green, curr_int.mousePoint, gradientarrowPoint, 3)
     # Draw charges
     for pointCharge in pointCharges:
         pointCharge.draw()
