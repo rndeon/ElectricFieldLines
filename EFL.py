@@ -16,11 +16,11 @@ k=1
 angleresolution=60
 spaceresolution=1
 screen = pygame.display.set_mode((display_width,display_height))
-screen.fill((255, 245, 210))
+screen.fill((255,255, 255))
 EFLsurface = pygame.Surface((display_width, display_height - Hudsize))
-EFLsurface = EFLsurface.convert()
 EFLsurface.fill((255, 245, 210))
 EFLsurface.set_colorkey((255, 245, 210))
+EFLsurface = EFLsurface.convert()
 HUD = pygame.Surface((display_width,Hudsize))
 HUD.fill((200, 245, 210))
 
@@ -70,17 +70,57 @@ class PointCharge(object):
         return position.isBetween(self.position - (self.size /2), self.position + (self.size /2))
 
 class DielectricRegion(object):
-    def __init__(self, rect, permittivity=1):
-        self.rect=rect #just rectangle regions for now, might get more ambitious later
+    def __init__(self, slope = 0, intercept=0, permittivity=1):
+        self.prev_perm = 0
+        self.slope = slope
+        self.intercept=intercept
         self.set_perm(permittivity)
+        #draw the region. divided by a line
+        if slope==0 and intercept==0: # then region is the whole screen, polygon to draw is just a square
+            polygonpoints=[(0,0), (0,EFLsurface.get_size()[1]), (EFLsurface.get_size()[0],EFLsurface.get_size()[1]), (EFLsurface.get_size()[0],0), (0,0)]
+        else: # need to get messy
+            polygonpoints=[(0,0)]
+            if intercept > EFLsurface.get_size()[1]: # need to go to the corner, then partway along the bottom screen limit
+                polygonpoints.append( (0,EFLsurface.get_size()[1]) )
+                polygonpoints.append( ( (EFLsurface.get_size()[1]-intercept) / slope , EFLsurface.get_size()[1]) )
+            else:
+                polygonpoints.append((0, intercept))
+            #find the point where the line hits the top of the screen
+            x_intercept = -intercept/slope
+            if x_intercept > EFLsurface.get_size()[0]: # need to hit the right side of the screen, then go up to hit the corner
+                polygonpoints.append( (EFLsurface.get_size()[0], slope * EFLsurface.get_size()[0] + intercept) )
+                polygonpoints.append( ( EFLsurface.get_size()[0],0) )
+            else:
+                polygonpoints.append( ( x_intercept,0) )
+            polygonpoints.append((0,0)) #back to start
+        self.polygon = polygonpoints
+        #draw this shape
+        regioncolour = 100 * Position((255, 245, 210)) / (100 + self.permittivity)
+        pygame.draw.polygon(screen, regioncolour,self.polygon,0 )
+
 
     def isInsideRegion(self,point):
-        return self.rect.collidepoint(point[0], point[1])
+        if self.slope==0 and self.intercept==0: # then region is the whole screen
+            return EFLsurface.get_rect().collidepoint(point[0], point[1])
+        else:
+            # since region is defined as the area above a line (and in these coordinates, 'above' means less than),
+            # we calculate what the line's y value is at the desired point's x value, and see if the point's y is less than the line's y
+            return point[1] <= self.slope * point[0] + self.intercept
 
     def set_perm(self,permittivity):
         if permittivity > 0:
             self.permittivity = permittivity
             self.k = 1 / self.permittivity
+        else:
+            self.permittivity = 1
+            self.k = 1
+
+    def draw(self):
+        # pin region colour to the value of its permittivity, darker = higher epsilon
+        regioncolour = 100 * Position((255, 245, 210)) / (100 + self.permittivity)
+        pygame.draw.polygon(screen, regioncolour,self.polygon,0)
+        self.prev_perm = self.permittivity
+
 
 
 def degreesToRadians(deg):
@@ -227,7 +267,7 @@ def isOnAnyPointCharges(point, pointcharges):
             return True
 
 def isInAnyRegion(point,regions, action=lambda region: print("region: %s" % region.permittivity)):
-    for region in regions:
+    for region in reversed(regions):
         if region.isInsideRegion(point):
             action(region)
             break
@@ -352,25 +392,8 @@ darkred=(100,0,0)
 yellow=(200,100,0)
 dullyellow=(100,50,0)
 
-pointCharges = [PointCharge(Position((300,300))), PointCharge(Position((300, 400)), -2)] #default to a mild starting configuration
-dielectricRegions = [DielectricRegion(screen.get_rect())] # this one is a little tricky.
-# mousePoint=Position((0,0))
-# prevMousePoint=Position((0,0))
-# mouseClick=Position((0,0))
-# prevMouseClick=Position((0,0))
 class ClickModes:
     addCharge, fieldline, dielectric = range(3)
-
-
-#currentMode=ClickModes.addCharge
-# def set_mode(mode):
-#     global currentMode
-#     currentMode = mode
-#
-# NewCharge=0
-# def set_charge(value):
-#     global NewCharge
-#     NewCharge = value
 
 curr_int = MouseInteractor()
 efls=[]
@@ -382,10 +405,20 @@ buttons=[Button("Find Field Line",0,display_height-100,buttonsize,50,green,dullg
          Button("Clear Screen", display_width - buttonsize, display_height - 50, buttonsize, 50, yellow, dullyellow,
                 action=lambda: clearEFLs() and clearCharges())]
 
+pointCharges = [PointCharge(Position((300,300))), PointCharge(Position((300, 400)), -2)] #default to a mild starting configuration
+dielectricRegions = [DielectricRegion(0,0,1) ,
+                        DielectricRegion( -EFLsurface.get_size()[1]/EFLsurface.get_size()[0], EFLsurface.get_size()[1] + 50 , 5)
+                     #DielectricRegion( -EFLsurface.get_size()[1]/EFLsurface.get_size()[0], EFLsurface.get_size()[1]/2 , 15)
+                     ]
+                    # elements go in order from first to last = bottom to top: first item should be the spatially lowest region on the screen (and probably you just want to set it to fill the whole screen in the back end)
 
+###MAIN event loop
 while True:
     #pin background colour to the value of its permittivity
-    screen.fill(100 * Position((255, 245, 210)) / (100 + dielectricRegions[-1].permittivity) )
+    for region in dielectricRegions:
+        region.draw()
+    #dielectricRegions[1].draw()
+    #screen.fill(100 * Position((255, 245, 210)) / (100 + dielectricRegions[-1].permittivity) )
     # Calculate ELFs
     for elf in efls:
         drawnew = nextEFLPoints(elf)
