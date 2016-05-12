@@ -70,14 +70,20 @@ class PointCharge(object):
         return position.isBetween(self.position - (self.size /2), self.position + (self.size /2))
 
 class DielectricRegion(object):
-    def __init__(self, slope = 0, intercept=0, permittivity=1):
-        self.prev_perm = 0
+    def __init__(self, slope = 0, intercept=0, permittivity=1, x_intercept=0): # if the line isn't vertical, provide its slope and intercept, if it is vertical, ignore setslope==intercept==0 and use the x_intercept value
         self.slope = slope
         self.intercept=intercept
+        self.x_intercept =x_intercept
         self.set_perm(permittivity)
         #draw the region. divided by a line
-        if slope==0 and intercept==0: # then region is the whole screen, polygon to draw is just a square
-            polygonpoints=[(0,0), (0,EFLsurface.get_size()[1]), (EFLsurface.get_size()[0],EFLsurface.get_size()[1]), (EFLsurface.get_size()[0],0), (0,0)]
+        if slope==0 :
+            if x_intercept==0:            
+                if intercept==0: # then region is the whole screen, polygon to draw is just a square
+                    polygonpoints=[(0,0), (0,EFLsurface.get_size()[1]), (EFLsurface.get_size()[0],EFLsurface.get_size()[1]), (EFLsurface.get_size()[0],0), (0,0)]
+                else:
+                    polygonpoints=[(0,0), (0,intercept), (EFLsurface.get_size()[0],intercept), (EFLsurface.get_size()[0],0), (0,0)] # horizontal division
+            else:
+                polygonpoints=[(0,0), (0,EFLsurface.get_size()[1]), (x_intercept,EFLsurface.get_size()[1]), (x_intercept,0), (0,0)] # vertical division       
         else: # need to get messy
             polygonpoints=[(0,0)]
             if intercept > EFLsurface.get_size()[1]: # need to go to the corner, then partway along the bottom screen limit
@@ -86,12 +92,12 @@ class DielectricRegion(object):
             else:
                 polygonpoints.append((0, intercept))
             #find the point where the line hits the top of the screen
-            x_intercept = -intercept/slope
-            if x_intercept > EFLsurface.get_size()[0]: # need to hit the right side of the screen, then go up to hit the corner
+            self.x_intercept = -intercept/slope
+            if self.x_intercept > EFLsurface.get_size()[0]: # need to hit the right side of the screen, then go up to hit the corner
                 polygonpoints.append( (EFLsurface.get_size()[0], slope * EFLsurface.get_size()[0] + intercept) )
                 polygonpoints.append( ( EFLsurface.get_size()[0],0) )
             else:
-                polygonpoints.append( ( x_intercept,0) )
+                polygonpoints.append( ( self.x_intercept,0) )
             polygonpoints.append((0,0)) #back to start
         self.polygon = polygonpoints
         #draw this shape
@@ -101,11 +107,15 @@ class DielectricRegion(object):
 
     def isInsideRegion(self,point):
         if self.slope==0 and self.intercept==0: # then region is the whole screen
-            return EFLsurface.get_rect().collidepoint(point[0], point[1])
+            if self.x_intercept ==0:
+                return EFLsurface.get_rect().collidepoint(point[0], point[1])
+            else:
+                return point[0] <= self.x_intercept 
         else:
             # since region is defined as the area above a line (and in these coordinates, 'above' means less than),
             # we calculate what the line's y value is at the desired point's x value, and see if the point's y is less than the line's y
-            return point[1] <= self.slope * point[0] + self.intercept
+            return (point[1] <= self.slope * point[0] + self.intercept) 
+
 
     def set_perm(self,permittivity):
         if permittivity > 0:
@@ -119,7 +129,7 @@ class DielectricRegion(object):
         # pin region colour to the value of its permittivity, darker = higher epsilon
         regioncolour = 100 * Position((255, 245, 210)) / (100 + self.permittivity)
         pygame.draw.polygon(screen, regioncolour,self.polygon,0)
-        self.prev_perm = self.permittivity
+
 
 
 
@@ -208,42 +218,52 @@ def getUphillPointAlongEFL(pointcharges, testpoint):
     return Position(nextPoint)
 
 #these next few functions deal in the field,
-def getEFieldAtPoint(pointcharges, testpoint):
+def getEFieldAtPoint(pointcharges, dielectricregions, testpoint):
     field = Position((0,0))
-    for pointCharge in pointcharges:
-        rdiff = (testpoint - pointCharge.position)
-        mag = math.pow((testpoint - pointCharge.position).magsquared(), 3/2)
-        field += (k * pointCharge.charge * rdiff) / (mag if mag != 0 else 0.0001)
-    return field
+    if len(dielectricregions) == 1:
+        for pointCharge in pointcharges:
+            rdiff = (testpoint - pointCharge.position)
+            mag = math.pow((testpoint - pointCharge.position).magsquared(), 3/2)
+            field += (dielectricregions[0].k * pointCharge.charge * rdiff) / (mag if mag != 0 else 0.0001)
+        return field
+    elif len(dielectricregions) == 2:
+        for pointCharge in pointcharges:
+            rdiff = (testpoint - pointCharge.position)
+            mag = math.pow((testpoint - pointCharge.position).magsquared(), 3/2)
+            field += (dielectricregions[0].k * pointCharge.charge * rdiff) / (mag if mag != 0 else 0.0001)
+        return field
+        
 #Finds the next point along a field line
-def getNextPointAlongEFLUsingField(pointcharges, testpoint):
-    E = getEFieldAtPoint(pointcharges, testpoint)
+def getNextPointAlongEFLUsingField(pointcharges,dielectricregions, testpoint):
+    E = getEFieldAtPoint(pointcharges,dielectricregions, testpoint)
     mag =E.mag()
     nextPoint = testpoint + spaceresolution * (E / (mag if mag != 0 else 0.0001) )
     return Position(nextPoint)
 
-def getUphillPointAlongEFLUsingField(pointcharges, testpoint):
-    E = getEFieldAtPoint(pointcharges, testpoint)
+def getUphillPointAlongEFLUsingField(pointcharges,dielectricregions, testpoint):
+    E = getEFieldAtPoint(pointcharges,dielectricregions, testpoint)
     mag = E.mag()
     nextPoint = testpoint - spaceresolution * (E / (mag if mag != 0 else 0.0001) )
     return Position(nextPoint)
 #this function gets the whole EFL in one shot, which can be annoyingly slow in a interactive program
 def traceEFL(elf):
+    global dielectricRegions
     while elf[-1].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(elf[-1],
                                                                                                             pointCharges):
-        elf.append(getNextPointAlongEFLUsingField(pointCharges, elf[-1]))
+        elf.append(getNextPointAlongEFLUsingField(pointCharges,dielectricRegions, elf[-1]))
         # print("next point is: %s" % (elf[-1],) )
     ##follow ELF backwards until it hits a charge or leaves the screen
     while elf[0].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(elf[0],
                                                                                                            pointCharges):
-        elf.insert(0, getUphillPointAlongEFLUsingField(pointCharges, elf[0]))
+        elf.insert(0, getUphillPointAlongEFLUsingField(pointCharges,dielectricRegions, elf[0]))
         # print("next point is: %s" % (elf[0],))
 #so this function just adds one point on either end of an existing field line, so it can be called intermittently
 def nextEFLPoints(efl):
+    global dielectricRegions
     newpoints = [False, False]
     if efl[-1].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(efl[-1],
                                                                                                          pointCharges):
-        efl.append(getNextPointAlongEFLUsingField(pointCharges, efl[-1]))
+        efl.append(getNextPointAlongEFLUsingField(pointCharges,dielectricRegions, efl[-1]))
         if len(efl)>2 and (efl[-1].isCloseEnoughTo(efl[-2], spaceresolution / 10) or efl[-1].isCloseEnoughTo(efl[-3], spaceresolution / 10)):
             efl.append(Position((display_width + 1, display_height + 1))) # hack in a way to stop the calculations if the field is really zero at a point. this appends a position outside the screen, so no more will be added.
             #print("hacked!")
@@ -252,7 +272,7 @@ def nextEFLPoints(efl):
 
     if efl[0].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(efl[0],
                                                                                                         pointCharges):
-        efl.insert(0, getUphillPointAlongEFLUsingField(pointCharges, efl[0]))
+        efl.insert(0, getUphillPointAlongEFLUsingField(pointCharges,dielectricRegions, efl[0]))
         #print(" %s" % (elf[0], ))
         if len(efl)>2 and (efl[0].isCloseEnoughTo(efl[1], spaceresolution/10) or efl[0].isCloseEnoughTo(efl[2], spaceresolution/10)):
             efl.insert(0, Position((display_width + 1, display_height + 1)))
@@ -407,7 +427,7 @@ buttons=[Button("Find Field Line",0,display_height-100,buttonsize,50,green,dullg
 
 pointCharges = [PointCharge(Position((300,300))), PointCharge(Position((300, 400)), -2)] #default to a mild starting configuration
 dielectricRegions = [DielectricRegion(0,0,1) ,
-                        DielectricRegion( -EFLsurface.get_size()[1]/EFLsurface.get_size()[0], EFLsurface.get_size()[1] + 50 , 5)
+                        DielectricRegion( 0, 0 , 15,EFLsurface.get_size()[1]/3)
                      #DielectricRegion( -EFLsurface.get_size()[1]/EFLsurface.get_size()[0], EFLsurface.get_size()[1]/2 , 15)
                      ]
                     # elements go in order from first to last = bottom to top: first item should be the spatially lowest region on the screen (and probably you just want to set it to fill the whole screen in the back end)
@@ -459,12 +479,14 @@ while True:
                     curr_int.set_charge(curr_int.newCharge +1)
                 elif curr_int.currentMode == ClickModes.dielectric:
                     isInAnyRegion(curr_int.mouseUp, dielectricRegions,action=lambda region: region.set_perm(region.permittivity +1))
+                    clearEFLs()
             elif event.button == 5:
                 if curr_int.currentMode == ClickModes.addCharge:
                     curr_int.set_charge(curr_int.newCharge - 1)
                 elif curr_int.currentMode == ClickModes.dielectric:
                     isInAnyRegion(curr_int.mouseUp, dielectricRegions,
                               action=lambda region: region.set_perm(region.permittivity - 1))
+                    clearEFLs()
         #elif event.type == pygame.MOUSEBUTTONDOWN:
 
             #nothing
@@ -474,7 +496,7 @@ while True:
         display_at_mouse("q = %s" % str(curr_int.newCharge))
     elif curr_int.currentMode == ClickModes.fieldline: # continuously displays the field right at the mouse cursor
         # draw gradient indicator arrow
-        nextPoint = getNextPointAlongEFLUsingField(pointCharges, curr_int.mousePoint)
+        nextPoint = getNextPointAlongEFLUsingField(pointCharges,dielectricRegions, curr_int.mousePoint)
         gradientarrowPoint = curr_int.mousePoint + (nextPoint - curr_int.mousePoint) * (
         20 / spaceresolution)  # Position([z * 10 for z in (nextPoint - mousePoint)])
         drawArrow(screen, green, curr_int.mousePoint, gradientarrowPoint, 3)
