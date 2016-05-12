@@ -2,10 +2,6 @@ import math
 import sys
 import numpy
 import pygame
-from functools import reduce
-import operator
-
-from collections import namedtuple
 
 pygame.init()
 
@@ -108,7 +104,7 @@ class DielectricRegion(object):
     def isInsideRegion(self,point):
         if self.slope==0 and self.intercept==0: # then region is the whole screen
             if self.x_intercept ==0:
-                return EFLsurface.get_rect().collidepoint(point[0], point[1])
+                return isInsideSurface(EFLsurface,point)
             else:
                 return point[0] <= self.x_intercept 
         else:
@@ -130,7 +126,25 @@ class DielectricRegion(object):
         regioncolour = 100 * Position((255, 245, 210)) / (100 + self.permittivity)
         pygame.draw.polygon(screen, regioncolour,self.polygon,0)
 
-
+    def imagePosition(self, point):
+        if self.slope==0 :
+            if self.x_intercept==0:
+                return Position(( point[0], point[1] + 2*(self.intercept - point[1]) ))
+            else:
+                return Position((point[0] + 2 * (self.x_intercept - point[0]), point[1] ))
+        else: # need to get messy
+            # from http://stackoverflow.com/questions/3306838/algorithm-for-reflecting-a-point-across-a-line
+            #d= (x + (y - c) * a) / (1 + a ^ 2) x distance from point to the line intersection
+            d=(point[0] + (point[1] - self.intercept)*self.slope)/ (1 + self.slope * self.slope)
+            #x' = 2*d - x
+            #y' = 2*d*a - y + 2c
+            return Position((2*d - point[0],2*d*self.slope - point[1] + 2* self.intercept ))
+    def imageCharge(self,other_region, point_charge):
+        # the value of the image charge (located in other_region), felt from this region
+        return -(other_region.permittivity -self.permittivity ) * point_charge.charge/(self.permittivity + other_region.permittivity)
+    def screenedCharge(self,other_region, point_charge):
+        # the value of the point charge (located in other_region) felt from this region
+        return 2 * self.permittivity  * point_charge.charge / ( self.permittivity + other_region.permittivity)
 
 
 def degreesToRadians(deg):
@@ -138,7 +152,8 @@ def degreesToRadians(deg):
 
 def isInsideSurface(surf, position):  # this function doesn't behave the way I think it should, so I don't know about surfaces enough yet
     temp=Position(surf.get_abs_offset())
-    return Position(surf.get_abs_offset()) < position < Position(surf.get_abs_offset() + surf.get_size())
+    tempsize=surf.get_size()
+    return position.isBetween(Position(surf.get_abs_offset()), Position(surf.get_abs_offset()) + Position(surf.get_size()) )
 
 def text_objects(text, font, colour):
     textSurface = font.render(text, True, colour)
@@ -226,12 +241,24 @@ def getEFieldAtPoint(pointcharges, dielectricregions, testpoint):
             mag = math.pow((testpoint - pointCharge.position).magsquared(), 3/2)
             field += (dielectricregions[0].k * pointCharge.charge * rdiff) / (mag if mag != 0 else 0.0001)
         return field
-    elif len(dielectricregions) == 2:
+    else: #only really accounts for  len(dielectricregions) == 2 so far
         for pointCharge in pointcharges:
             rdiff = (testpoint - pointCharge.position)
             mag = math.pow((testpoint - pointCharge.position).magsquared(), 3/2)
-            field += (dielectricregions[0].k * pointCharge.charge * rdiff) / (mag if mag != 0 else 0.0001)
+            testpoint_i=isInWhichRegion(testpoint, dielectricregions)
+            pointCharge_i=isInWhichRegion(pointCharge.position,dielectricregions)
+            # the rest assumes only two regions, and that the second region ( dielectricregions[1]) is the one with the interface definition)
+            if testpoint_i == pointCharge_i:
+                other_region_i = 1 - testpoint_i # suuuuuuper hacky
+                image=PointCharge(dielectricregions[1].imagePosition(pointCharge.position), dielectricregions[testpoint_i].imageCharge(dielectricregions[other_region_i],pointCharge) )
+                image_rdiff = (testpoint - image.position)
+                image_mag = math.pow((testpoint - image.position).magsquared(), 3 / 2)
+                field += dielectricregions[testpoint_i].k * (pointCharge.charge * rdiff) / (mag if mag != 0 else 0.0001)
+                field += dielectricregions[testpoint_i].k * (image.charge * image_rdiff) / (image_mag if image_mag != 0 else 0.0001)
+            else:
+                field += dielectricregions[testpoint_i].k * (dielectricregions[testpoint_i].screenedCharge(dielectricregions[pointCharge_i], pointCharge) * rdiff) / (mag if mag != 0 else 0.0001)
         return field
+
         
 #Finds the next point along a field line
 def getNextPointAlongEFLUsingField(pointcharges,dielectricregions, testpoint):
@@ -291,6 +318,10 @@ def isInAnyRegion(point,regions, action=lambda region: print("region: %s" % regi
         if region.isInsideRegion(point):
             action(region)
             break
+def isInWhichRegion(point,regions):
+    for index,region in enumerate(reversed(regions)):
+        if region.isInsideRegion(point):
+            return index
 
 def autoStartEFLs():
     global efls
@@ -492,16 +523,17 @@ while True:
             #nothing
 
     curr_int.mousePoint = Position(pygame.mouse.get_pos())
-    if curr_int.currentMode == ClickModes.addCharge: # displays the charge value that will be placed on click, just above the mouse cursor
-        display_at_mouse("q = %s" % str(curr_int.newCharge))
-    elif curr_int.currentMode == ClickModes.fieldline: # continuously displays the field right at the mouse cursor
-        # draw gradient indicator arrow
-        nextPoint = getNextPointAlongEFLUsingField(pointCharges,dielectricRegions, curr_int.mousePoint)
-        gradientarrowPoint = curr_int.mousePoint + (nextPoint - curr_int.mousePoint) * (
-        20 / spaceresolution)  # Position([z * 10 for z in (nextPoint - mousePoint)])
-        drawArrow(screen, green, curr_int.mousePoint, gradientarrowPoint, 3)
-    elif curr_int.currentMode == ClickModes.dielectric: # displays the permittivity right at the mouse cursor
-        isInAnyRegion(curr_int.mousePoint,dielectricRegions ,action=lambda region: display_at_mouse("ϵ = %s" % region.permittivity))
+    if isInsideSurface(EFLsurface, curr_int.mousePoint):
+        if curr_int.currentMode == ClickModes.addCharge: # displays the charge value that will be placed on click, just above the mouse cursor
+            display_at_mouse("q = %s" % str(curr_int.newCharge))
+        elif curr_int.currentMode == ClickModes.fieldline: # continuously displays the field right at the mouse cursor
+            # draw gradient indicator arrow
+            nextPoint = getNextPointAlongEFLUsingField(pointCharges,dielectricRegions, curr_int.mousePoint)
+            gradientarrowPoint = curr_int.mousePoint + (nextPoint - curr_int.mousePoint) * (
+            20 / spaceresolution)  # Position([z * 10 for z in (nextPoint - mousePoint)])
+            drawArrow(screen, green, curr_int.mousePoint, gradientarrowPoint, 3)
+        elif curr_int.currentMode == ClickModes.dielectric: # displays the permittivity right at the mouse cursor
+            isInAnyRegion(curr_int.mousePoint,dielectricRegions ,action=lambda region: display_at_mouse("ε = %s" % region.permittivity))
 
     # Draw charges
     for pointCharge in pointCharges:
