@@ -20,21 +20,27 @@ EFLsurface = EFLsurface.convert()
 HUD = pygame.Surface((display_width,Hudsize))
 HUD.fill((200, 245, 210))
 
-class Position(tuple): #probably poorly named, it really functions as 2D vector convenience methods
+class Position(object): #probably poorly named, it really functions as 2D vector convenience methods
+    def __init__(self, new_tuple):
+        self.tuple = tuple(new_tuple)
+    def __getitem__(self, index):
+        return self.tuple[index]
     def __add__(self, other):
         return Position(x1 + x2 for x1, x2 in zip(self, other))
     def __sub__(self, other):
-        return Position(x1 - x2 for x1, x2 in zip(self, other))
+        return Position(x1 - x2 for x1, x2 in zip(self.tuple, other.get_tuple()))
     def __rmul__(self, other):
-        return Position(other * x for x in self)
+        return Position(other * x for x in self.tuple)
     def __mul__(self, other):
-        return Position(other * x for x in self)
+        return Position(other * x for x in self.tuple)
     def __floordiv__(self, other):
-        return Position(x // other for x in self)
+        return Position(x // other for x in self.tuple)
     def __truediv__(self, other):
-        return Position(x / other for x in self)
+        return Position(x / other for x in self.tuple)
+    def get_tuple(self):
+        return self.tuple
     def isBetween(self, point1,point2):
-        betweens= Position(x1 <= s <= x2 or x2 <= s <= x1 for x1,s , x2 in zip(point1, self, point2))
+        betweens= Position(x1 <= s <= x2 or x2 <= s <= x1 for x1,s , x2 in zip(point1, self.tuple, point2))
         return all(betweens)
     def mag(self):
         return math.sqrt(self[0]*self[0] + self[1]*self[1])
@@ -42,6 +48,8 @@ class Position(tuple): #probably poorly named, it really functions as 2D vector 
         return self[0] * self[0] + self[1] * self[1]
     def isCloseEnoughTo(self,other,precision):
         return self.isBetween(other + Position((precision,precision)), other - Position((precision,precision)))
+    def move(self, amount):
+        self.tuple = tuple(x1 + x2 for x1, x2 in zip(self, amount))
 
 class PointCharge(object):
 
@@ -49,10 +57,10 @@ class PointCharge(object):
         self.position = position
         self.charge=charge
         self.size =  Position((20,20))
-        self.surface = pygame.Surface(self.size)
+        self.surface = pygame.Surface(self.size.get_tuple())
         self.surface.fill(black)
         self.surface.set_colorkey(black)
-        pygame.draw.circle(self.surface, red if self.charge > 0 else blue, self.size //2, 10, 0)
+        pygame.draw.circle(self.surface, red if self.charge > 0 else blue, (self.size //2).get_tuple(), 10, 0)
 
         smallText = pygame.font.SysFont("comicsansms", 15)
         textSurf, textRect = text_objects(str(self.charge), smallText, white)
@@ -60,7 +68,7 @@ class PointCharge(object):
         self.surface.blit(textSurf, textRect)
 
     def draw(self):
-        screen.blit(self.surface,self.position-Position((10,10)))
+        screen.blit(self.surface,(self.position-Position((10,10))).get_tuple() )
 
     def isClickedOn(self,position):
         return position.isBetween(self.position - (self.size /2), self.position + (self.size /2))
@@ -98,7 +106,7 @@ class DielectricRegion(object):
         self.polygon = polygonpoints
         #draw this shape
         regioncolour = 100 * Position((255, 245, 210)) / (100 + self.permittivity)
-        pygame.draw.polygon(screen, regioncolour,self.polygon,0 )
+        pygame.draw.polygon(screen, regioncolour.get_tuple(),self.polygon,0 )
 
 
     def isInsideRegion(self,point):
@@ -124,7 +132,7 @@ class DielectricRegion(object):
     def draw(self):
         # pin region colour to the value of its permittivity, darker = higher epsilon
         regioncolour = 100 * Position((255, 245, 210)) / (100 + self.permittivity)
-        pygame.draw.polygon(screen, regioncolour,self.polygon,0)
+        pygame.draw.polygon(screen, regioncolour.get_tuple(),self.polygon,0)
 
     def imagePosition(self, point):
         if self.slope==0 :
@@ -164,7 +172,7 @@ def display_at_mouse(msg):
     # textSurf = smallText.render(str(curr_int.newCharge), True, black)
     textSurf, textRect = text_objects(msg, smallText, black)
     # textRect = textSurf.get_rect()
-    textRect.bottomleft = curr_int.mousePoint
+    textRect.bottomleft = curr_int.mousePoint.get_tuple()
     screen.blit(textSurf, textRect)
 #maybe useful later -
 def message_display(text,position):
@@ -375,7 +383,7 @@ class Button:
         else:
             self.clickcountdown -= 1
         pygame.draw.rect(self.surface, black, (0, 0, self.w, self.h), 1)
-        screen.blit(self.surface, self.position)
+        screen.blit(self.surface, self.position.get_tuple())
 
 def clearEFLs():
     global efls
@@ -398,7 +406,8 @@ class MouseInteractor:
         self.prevMouseUp = Position((0, 0))
         self.mouseDown = Position((0, 0))
         self.prevMouseDown = Position((0, 0))
-
+        self.mousedragging=False
+        self.dragPosition= Position((0,0))
         self.newCharge = 0
         self.newDielectric = 1
     def set_charge(self,value):
@@ -475,9 +484,9 @@ while True:
         drawnew = nextEFLPoints(elf)
         # Draw ELFs
         if drawnew[0]:
-            pygame.draw.line(EFLsurface, black, elf[0], elf[0], 1)
+            pygame.draw.line(EFLsurface, black, elf[0].get_tuple(), elf[0].get_tuple(), 1)
         if drawnew[1]:
-            pygame.draw.line(EFLsurface, black, elf[-1], elf[-1], 1)
+            pygame.draw.line(EFLsurface, black, elf[-1].get_tuple(), elf[-1].get_tuple(), 1)
 
     screen.blit(HUD, (0, display_height - Hudsize))
     screen.blit(EFLsurface, (0, 0))  # screen.fill((255, 245, 210))
@@ -489,7 +498,7 @@ while True:
 
         if event.type == pygame.MOUSEBUTTONUP:
             curr_int.mouseUp = Position(pygame.mouse.get_pos())
-            if event.button == 1:
+            if event.button == 1: # left click
                 buttonclick=False
                 for button in buttons:
                     if button.click(curr_int.mouseUp):
@@ -497,44 +506,56 @@ while True:
                 if not buttonclick: #here's where we interact with most of the screen. the `simulation'.
                     if curr_int.currentMode == ClickModes.fieldline and curr_int.mouseUp != curr_int.prevMouseUp: # start up a field line calc
                         efls.append([curr_int.mouseUp])
-                    if curr_int.currentMode == ClickModes.addCharge and curr_int.newCharge != 0: # add a new charge
-                        pointCharges.append(PointCharge(curr_int.mouseUp, curr_int.newCharge))
-                        clearEFLs()
+                    if curr_int.currentMode == ClickModes.addCharge:
+                        if curr_int.mousedragging:
+                            curr_int.mousedragging = False
+                            curr_int.dragPosition = Position((0,0))
+                        elif curr_int.newCharge != 0: # add a new charge
+                            pointCharges.append(PointCharge(curr_int.mouseUp, curr_int.newCharge))
+                            clearEFLs()
                 curr_int.prevMouseUp = curr_int.mouseUp
-            elif event.button == 3:
+            elif event.button == 3: #right click
                 if curr_int.currentMode == ClickModes.addCharge: #remove a charge with right click
                     pointCharges = [x for x in pointCharges if not x.isClickedOn(curr_int.mouseUp)]
                     clearEFLs()
-            elif event.button ==4:
+            elif event.button ==4: #scroll mouse wheel up
                 if curr_int.currentMode == ClickModes.addCharge:
                     curr_int.set_charge(curr_int.newCharge +1)
                 elif curr_int.currentMode == ClickModes.dielectric:
                     isInAnyRegion(curr_int.mouseUp, dielectricRegions,action=lambda region: region.set_perm(region.permittivity +1))
                     clearEFLs()
-            elif event.button == 5:
+            elif event.button == 5: #scroll mouse wheel down
                 if curr_int.currentMode == ClickModes.addCharge:
                     curr_int.set_charge(curr_int.newCharge - 1)
                 elif curr_int.currentMode == ClickModes.dielectric:
                     isInAnyRegion(curr_int.mouseUp, dielectricRegions,
                               action=lambda region: region.set_perm(region.permittivity - 1))
                     clearEFLs()
-        #elif event.type == pygame.MOUSEBUTTONDOWN:
-
-            #nothing
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            curr_int.mouseDown = Position(pygame.mouse.get_pos())
+            if event.button == 1:  # left click
+                if curr_int.currentMode == ClickModes.addCharge:
+                    for pointCharge in pointCharges:
+                        if pointCharge.isClickedOn(curr_int.mouseDown):
+                            curr_int.mousedragging = True
+                            curr_int.dragPosition = pointCharge.position
+                            clearEFLs()
 
     curr_int.mousePoint = Position(pygame.mouse.get_pos())
     if isInsideSurface(EFLsurface, curr_int.mousePoint):
         if curr_int.currentMode == ClickModes.addCharge: # displays the charge value that will be placed on click, just above the mouse cursor
             display_at_mouse("q = %s" % str(curr_int.newCharge))
+            if curr_int.mousedragging:
+                curr_int.dragPosition.move(curr_int.mousePoint - curr_int.prevMousePoint)
         elif curr_int.currentMode == ClickModes.fieldline: # continuously displays the field right at the mouse cursor
             # draw gradient indicator arrow
             nextPoint = getNextPointAlongEFLUsingField(pointCharges,dielectricRegions, curr_int.mousePoint)
             gradientarrowPoint = curr_int.mousePoint + (nextPoint - curr_int.mousePoint) * (
             20 / spaceresolution)  # Position([z * 10 for z in (nextPoint - mousePoint)])
-            drawArrow(screen, green, curr_int.mousePoint, gradientarrowPoint, 3)
+            drawArrow(screen, green, curr_int.mousePoint.get_tuple(), gradientarrowPoint.get_tuple(), 3)
         elif curr_int.currentMode == ClickModes.dielectric: # displays the permittivity right at the mouse cursor
             isInAnyRegion(curr_int.mousePoint,dielectricRegions ,action=lambda region: display_at_mouse("ε = %s" % region.permittivity))
-
+    curr_int.prevMousePoint = curr_int.mousePoint
     # Draw charges
     for pointCharge in pointCharges:
         pointCharge.draw()
