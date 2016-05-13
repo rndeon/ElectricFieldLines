@@ -329,7 +329,7 @@ def isInAnyRegion(point,regions, action=lambda region: print("region: %s" % regi
 def isInWhichRegion(point,regions):
     for index,region in enumerate(reversed(regions)):
         if region.isInsideRegion(point):
-            return index
+            return len(regions)-1 - index # because index now indexes the reversed list!
 
 def autoStartEFLs():
     global efls
@@ -518,6 +518,10 @@ while True:
                 if curr_int.currentMode == ClickModes.addCharge: #remove a charge with right click
                     pointCharges = [x for x in pointCharges if not x.isClickedOn(curr_int.mouseUp)]
                     clearEFLs()
+                elif curr_int.currentMode == ClickModes.dielectric:
+                    index= isInWhichRegion(curr_int.mouseUp, dielectricRegions)
+                    if index != 0:
+                        del dielectricRegions[index]
             elif event.button ==4: #scroll mouse wheel up
                 if curr_int.currentMode == ClickModes.addCharge:
                     curr_int.set_charge(curr_int.newCharge +1)
