@@ -4,7 +4,8 @@ import numpy
 import pygame
 
 pygame.init()
-
+pygame.display.set_caption("Electric Field Lines")
+#globals and such
 display_width = 800
 display_height = 800
 Hudsize=100
@@ -19,6 +20,21 @@ EFLsurface.set_colorkey((255, 245, 210))
 EFLsurface = EFLsurface.convert()
 HUD = pygame.Surface((display_width,Hudsize))
 HUD.fill((200, 245, 210))
+
+black = (0,0,0)
+white = (255,255,255)
+dullgrey = (100,100,100)
+grey = (200,200,200)
+red = (255,0,0)
+green = (0,255,0)
+dullgreen= (0,175,0)
+blue = (0,0,255)
+lightblue=(200,200,255)
+darkblue=(0,0,100)
+lightred=(255,200,200)
+darkred=(100,0,0)
+yellow=(200,100,0)
+dullyellow=(100,50,0)
 
 class Position(object): #probably poorly named, it really functions as 2D vector convenience methods
     def __init__(self, new_tuple):
@@ -52,7 +68,6 @@ class Position(object): #probably poorly named, it really functions as 2D vector
         self.tuple = tuple(x1 + x2 for x1, x2 in zip(self, amount))
 
 class PointCharge(object):
-
     def __init__(self, position, charge=1 ):
         self.position = position
         self.charge=charge
@@ -74,7 +89,7 @@ class PointCharge(object):
         return position.isBetween(self.position - (self.size /2), self.position + (self.size /2))
 
 class DielectricRegion(object):
-    def __init__(self, slope = 0, intercept=0, permittivity=1, x_intercept=0): # if the line isn't vertical, provide its slope and intercept, if it is vertical, ignore setslope==intercept==0 and use the x_intercept value
+    def __init__(self, slope = 0, intercept=0, permittivity=1, x_intercept=0): # if the line isn't vertical, provide its slope and intercept, if it is vertical, set slope==intercept==0 and use the x_intercept value
         self.slope = slope
         self.intercept=intercept
         self.x_intercept =x_intercept
@@ -120,7 +135,6 @@ class DielectricRegion(object):
             # we calculate what the line's y value is at the desired point's x value, and see if the point's y is less than the line's y
             return (point[1] <= self.slope * point[0] + self.intercept) 
 
-
     def set_perm(self,permittivity):
         if permittivity > 0:
             self.permittivity = permittivity
@@ -133,6 +147,26 @@ class DielectricRegion(object):
         # pin region colour to the value of its permittivity, darker = higher epsilon
         regioncolour = 100 * Position((255, 245, 210)) / (100 + self.permittivity)
         pygame.draw.polygon(screen, regioncolour.get_tuple(),self.polygon,0)
+        if not( self.slope==0 and self.intercept ==0 and self.x_intercept==0): #then the region doesn't fill the whole screen, so we should draw something at the interface
+            firstpoint = (0,0)
+            secondpoint = (0,0)
+            if self.slope==0:
+                if self.x_intercept==0:
+                    firstpoint = (0,self.intercept)
+                    secondpoint=(display_width, self.intercept)
+                else:
+                    firstpoint = (self.x_intercept,0)
+                    secondpoint =(self.x_intercept, EFLsurface.get_height())
+            else:
+                if self.intercept > EFLsurface.get_size()[1]:
+                    firstpoint=( (EFLsurface.get_size()[1]-self.intercept) / self.slope , EFLsurface.get_size()[1])
+                else:
+                    firstpoint= (0, self.intercept)
+                if self.x_intercept > EFLsurface.get_size()[0]:
+                    secondpoint = (EFLsurface.get_size()[0], self.slope * EFLsurface.get_size()[0] + self.intercept)
+                else:
+                    secondpoint = (self.x_intercept, 0)
+            pygame.draw.line(screen, white, firstpoint, secondpoint, 2)
 
     def imagePosition(self, point):
         if self.slope==0 :
@@ -158,9 +192,7 @@ class DielectricRegion(object):
 def degreesToRadians(deg):
     return deg/180.0 * math.pi
 
-def isInsideSurface(surf, position):  # this function doesn't behave the way I think it should, so I don't know about surfaces enough yet
-    temp=Position(surf.get_abs_offset())
-    tempsize=surf.get_size()
+def isInsideSurface(surf, position):
     return position.isBetween(Position(surf.get_abs_offset()), Position(surf.get_abs_offset()) + Position(surf.get_size()) )
 
 def text_objects(text, font, colour):
@@ -183,7 +215,7 @@ def message_display(text,position):
 
     pygame.display.update()
 
-#Just used to indicator the electric field at the mouse pointer
+#Just used to indicate the electric field at the mouse pointer. Some of this code comes from a stackoverflow answer that I have lost now
 def drawArrow(surf,colour, start_pos, end_pos, width=1,arrowheadsize=8):
     pygame.draw.line(surf,colour, start_pos, end_pos, width)
     arrow = pygame.Surface((arrowheadsize, arrowheadsize))
@@ -280,6 +312,7 @@ def getUphillPointAlongEFLUsingField(pointcharges,dielectricregions, testpoint):
     mag = E.mag()
     nextPoint = testpoint - spaceresolution * (E / (mag if mag != 0 else 0.0001) )
     return Position(nextPoint)
+
 #this function gets the whole EFL in one shot, which can be annoyingly slow in a interactive program
 def traceEFL(elf):
     global dielectricRegions
@@ -292,6 +325,7 @@ def traceEFL(elf):
                                                                                                            pointCharges):
         elf.insert(0, getUphillPointAlongEFLUsingField(pointCharges,dielectricRegions, elf[0]))
         # print("next point is: %s" % (elf[0],))
+
 #so this function just adds one point on either end of an existing field line, so it can be called intermittently
 def nextEFLPoints(efl):
     global dielectricRegions
@@ -362,8 +396,6 @@ class Button:
         self.wasclicked = False # so the button can change colour briefly
         self.clickcountdown=0
 
-    #def mouseOver(self, mouse_pos):
-        #nothing
     def click(self,mouseclick):
         self.wasclicked = mouseclick.isBetween(self.position, self.position + self.size)
         if self.wasclicked and self.action != None:
@@ -416,45 +448,10 @@ class MouseInteractor:
     def set_mode(self,mode):
         self.currentMode = mode
 
-
-# #testing my between function
-# print("%s" % (pointCharges[0].position.isBetween((100,300),(400,300) ),))
-# print("%s" % (pointCharges[0].position.isBetween((100,100),(400,400) ),))
-# print("%s" % (pointCharges[0].position.isBetween((400,400),(0,0) ),))
-# print("%s" % (pointCharges[0].position.isBetween((100,400),(300,200) ),))
-# print("%s" % (pointCharges[0].position.isBetween((00,00),(8000,800) ),))
-# print("%s" % (pointCharges[0].position.isBetween((100,500),(400,500) ),))
-# print("%s" % (pointCharges[0].position.isBetween((400,100),(400,300) ),))
-# print("%s" % (pointCharges[0].position.isBetween((0,100),(200,300) ),))
-# print("%s" % (pointCharges[0].position.isBetween((0,100),(200,30) ),))
-# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((100,100)),1), )  )
-# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((100.5,100.5)),1), )  )
-# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((101,100.5)),1), )  )
-# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((101,99)),1), )  )
-# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((99.5,99.5)),1), )  )
-# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((99,98.9)),1), )  )
-# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((100.99,98.9)),1), )  )
-# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((101,101.1)),1), )  )
-
-#globals and such
-black = (0,0,0)
-white = (255,255,255)
-dullgrey = (100,100,100)
-grey = (200,200,200)
-red = (255,0,0)
-green = (0,255,0)
-dullgreen= (0,175,0)
-blue = (0,0,255)
-lightblue=(200,200,255)
-darkblue=(0,0,100)
-lightred=(255,200,200)
-darkred=(100,0,0)
-yellow=(200,100,0)
-dullyellow=(100,50,0)
-
 class ClickModes:
     addCharge, fieldline, dielectric = range(3)
 
+#More globals
 curr_int = MouseInteractor()
 efls=[]
 buttonsize=250
@@ -462,23 +459,23 @@ buttons=[Button("Find Field Line",0,display_height-100,buttonsize,50,green,dullg
          Button("Edit Point Charges",0,display_height-50,buttonsize,50,grey,dullgrey, action=lambda: curr_int.set_mode(ClickModes.addCharge)),
          Button("Autostart Lines", display_width - buttonsize, display_height - 100, buttonsize, 50, lightblue, darkblue, action=autoStartEFLs),
          Button("Edit Dielectric Regions", buttonsize, display_height - 50, buttonsize, 50, lightred, darkred, action=lambda: curr_int.set_mode(ClickModes.dielectric)),
-         Button("Clear Screen", display_width - buttonsize, display_height - 50, buttonsize, 50, yellow, dullyellow,
-                action=lambda: clearEFLs() and clearCharges())]
+         Button("Clear Screen", display_width - buttonsize, display_height - 50, buttonsize, 50, yellow, dullyellow, action=lambda: clearEFLs() and clearCharges())
+         ]
 
 pointCharges = [PointCharge(Position((300,300))), PointCharge(Position((300, 400)), -2)] #default to a mild starting configuration
-dielectricRegions = [DielectricRegion(0,0,1) ,
-                        DielectricRegion( 0, 0 , 15,EFLsurface.get_size()[1]/3)
-                     #DielectricRegion( -EFLsurface.get_size()[1]/EFLsurface.get_size()[0], EFLsurface.get_size()[1]/2 , 15)
+dielectricRegions = [DielectricRegion(0,0,1) , # this is the full screen, don't remove this one.
+                     #   DielectricRegion( 0, 0 , 15,EFLsurface.get_size()[1]/3) # vertical region
+                     #DielectricRegion( -EFLsurface.get_size()[1]/EFLsurface.get_size()[0], EFLsurface.get_size()[1]/2 , 15) # angled region
+                     DielectricRegion(-EFLsurface.get_size()[1] / EFLsurface.get_size()[0] / 2, EFLsurface.get_size()[1] +50, 15) # larger angled region
                      ]
-                    # elements go in order from first to last = bottom to top: first item should be the spatially lowest region on the screen (and probably you just want to set it to fill the whole screen in the back end)
+                    # first region fills screen, later regions are defined above and to the left of their interface line
 
 ###MAIN event loop
 while True:
     #pin background colour to the value of its permittivity
     for region in dielectricRegions:
         region.draw()
-    #dielectricRegions[1].draw()
-    #screen.fill(100 * Position((255, 245, 210)) / (100 + dielectricRegions[-1].permittivity) )
+
     # Calculate ELFs
     for elf in efls:
         drawnew = nextEFLPoints(elf)
@@ -525,6 +522,7 @@ while True:
                     index= isInWhichRegion(curr_int.mouseUp, dielectricRegions)
                     if index != 0:
                         del dielectricRegions[index]
+                        clearEFLs()
             elif event.button ==4: #scroll mouse wheel up
                 if curr_int.currentMode == ClickModes.addCharge:
                     curr_int.set_charge(curr_int.newCharge +1)
@@ -563,6 +561,7 @@ while True:
         elif curr_int.currentMode == ClickModes.dielectric: # displays the permittivity right at the mouse cursor
             isInAnyRegion(curr_int.mousePoint,dielectricRegions ,action=lambda region: display_at_mouse("ε = %s" % region.permittivity))
     curr_int.prevMousePoint = curr_int.mousePoint
+
     # Draw charges
     for pointCharge in pointCharges:
         pointCharge.draw()
@@ -572,9 +571,6 @@ while True:
     for button in buttons:
         button.draw()
 
-    #message_display("%.3g" % V, mousePoint + (0, -10))
-    #screen.blit(background, (0, 0))
     pygame.display.update()
 
-    #pygame.quit(); sys.exit()
     
