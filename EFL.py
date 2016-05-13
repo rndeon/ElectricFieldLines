@@ -506,13 +506,16 @@ while True:
                 if not buttonclick: #here's where we interact with most of the screen. the `simulation'.
                     if curr_int.currentMode == ClickModes.fieldline and curr_int.mouseUp != curr_int.prevMouseUp: # start up a field line calc
                         efls.append([curr_int.mouseUp])
-                    if curr_int.currentMode == ClickModes.addCharge:
+                    elif curr_int.currentMode == ClickModes.addCharge:
                         if curr_int.mousedragging:
                             curr_int.mousedragging = False
                             curr_int.dragPosition = Position((0,0))
                         elif curr_int.newCharge != 0: # add a new charge
                             pointCharges.append(PointCharge(curr_int.mouseUp, curr_int.newCharge))
                             clearEFLs()
+                    elif curr_int.currentMode == ClickModes.dielectric and len(dielectricRegions) <=1:
+                        dielectricRegions.append(DielectricRegion(0,0,1,curr_int.mouseUp[0]))
+                        clearEFLs()
                 curr_int.prevMouseUp = curr_int.mouseUp
             elif event.button == 3: #right click
                 if curr_int.currentMode == ClickModes.addCharge: #remove a charge with right click
