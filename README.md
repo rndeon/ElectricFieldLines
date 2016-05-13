@@ -1,8 +1,21 @@
 Electric Field Line Visualizer
 ===
-Interactively displays the electric field lines for a collection of point charges.
+Interactively displays the electric field lines for a collection of point charges. You can also set up to two dielectric regions with different permittivities!
 
-Usage:
+Installation
+---
+Runs on Python 3.5 with pygame.
+
+If you're on Windows, I've included a EFL.zip that you can extract anywhere on your system and hopefully EFL.exe inside the extracted folder will work.
+
+If you're on linux, [this page](http://askubuntu.com/questions/401342/how-to-download-pygame-in-python3-3 "StackOverflow") has a helpful set of instructions for installing pygame for python3.
+
+If you're on Mac...I don't know, google it I guess.
+
+Usage
+----
+Either run `python3 EFL.py` in the directory or run the EFL.exe, depending on your system.
+
  1. **Edit Point Charges** mode
     * Mousewheel to choose the value of the point charge to place
     * Left click to place, right click to remove charges
@@ -25,7 +38,9 @@ Runs slower with
 - more point charges
 - two dielectric regions than with one
 
-but the configurations of them should all be equal.
+but the positional configurations and values of the regions and charges shouldn't affect its performance.
 
 
-Runs on Python 3.5 with pygame, and is my first python project. A lot of StackOverflow in this one.
+This is my first python project. A lot of StackOverflow in this one.
+
+Let me know if you have problems!
