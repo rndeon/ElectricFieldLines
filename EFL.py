@@ -310,9 +310,7 @@ def getEFieldAtPoint(pointcharges, dielectricregions, testpoint):
             pointCharge_i=isInWhichRegion(pointCharge.position,dielectricregions)
             # the rest assumes only two regions, and that the second region ( dielectricregions[1]) is the one with the interface definition)
             if testpoint_i == pointCharge_i:
-                if dielectricregions[pointCharge_i].permittivity == 0:
-                    field += Position((0,0))
-                else:
+                if not dielectricregions[pointCharge_i].permittivity == 0:
                     other_region_i = 1 - testpoint_i # suuuuuuper hacky
                     image=PointCharge(dielectricregions[1].imagePosition(pointCharge.position), dielectricregions[testpoint_i].imageCharge(dielectricregions[other_region_i],pointCharge) )
                     image_rdiff = (testpoint - image.position)
@@ -320,9 +318,7 @@ def getEFieldAtPoint(pointcharges, dielectricregions, testpoint):
                     field += dielectricregions[testpoint_i].k * (pointCharge.charge * rdiff) / (mag if mag != 0 else 0.0001)
                     field += dielectricregions[testpoint_i].k * (image.charge * image_rdiff) / (image_mag if image_mag != 0 else 0.0001)
             else:
-                if dielectricregions[testpoint_i].permittivity == 0 or dielectricregions[pointCharge_i].permittivity == 0:
-                    field += Position((0, 0))
-                else:
+                if not (dielectricregions[testpoint_i].permittivity == 0 or dielectricregions[pointCharge_i].permittivity == 0 ):
                     field += dielectricregions[testpoint_i].k * (dielectricregions[testpoint_i].screenedCharge(dielectricregions[pointCharge_i], pointCharge) * rdiff) / (mag if mag != 0 else 0.0001)
         return field
 
@@ -493,7 +489,7 @@ pointCharges = [PointCharge(Position((300,300))), PointCharge(Position((300, 400
 dielectricRegions = [DielectricRegion(0,0,1) , # this is the full screen, don't remove this one.
                      #   DielectricRegion( 0, 0 , 15,EFLsurface.get_size()[1]/3) # vertical region
                      #DielectricRegion( -EFLsurface.get_size()[1]/EFLsurface.get_size()[0], EFLsurface.get_size()[1]/2 , 15) # angled region
-                     DielectricRegion(-EFLsurface.get_size()[1] / EFLsurface.get_size()[0] / 2, EFLsurface.get_size()[1] +50, -15) # larger angled region
+                     DielectricRegion(-EFLsurface.get_size()[1] / EFLsurface.get_size()[0] / 2, EFLsurface.get_size()[1] +50, 15) # larger angled region
                      ]
                     # first region fills screen, later regions are defined above and to the left of their interface line
 

@@ -24,7 +24,7 @@ Either run `python3 EFL.py` in the directory or run the EFL.exe, depending on yo
     * Click anywhere to find the field line that runs through that point!
     * Field lines will stop calculating at screen borders, at point charges, and when it hits a zero-field point
  3. **Edit Dielectric Regions** mode
-    * Mousewheel to adjust the permittivity of the region your mouse is hovering over
+    * Mousewheel to adjust the permittivity of the region your mouse is hovering over. In place of permittivity=0, the region is set to be an ideal conductor. Negative permitivity is allowed, but might not be accurate.
     * Right click to remove a region (it's a bit unintuitive, because I need at least one region to exist, so it'll only agree to delete the region above/to the left of the interface)
     * Left click to add a region (only allows two right now)
  4. **Autostart Lines** button
