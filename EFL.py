@@ -310,14 +310,20 @@ def getEFieldAtPoint(pointcharges, dielectricregions, testpoint):
             pointCharge_i=isInWhichRegion(pointCharge.position,dielectricregions)
             # the rest assumes only two regions, and that the second region ( dielectricregions[1]) is the one with the interface definition)
             if testpoint_i == pointCharge_i:
-                other_region_i = 1 - testpoint_i # suuuuuuper hacky
-                image=PointCharge(dielectricregions[1].imagePosition(pointCharge.position), dielectricregions[testpoint_i].imageCharge(dielectricregions[other_region_i],pointCharge) )
-                image_rdiff = (testpoint - image.position)
-                image_mag = math.pow((testpoint - image.position).magsquared(), 3 / 2)
-                field += dielectricregions[testpoint_i].k * (pointCharge.charge * rdiff) / (mag if mag != 0 else 0.0001)
-                field += dielectricregions[testpoint_i].k * (image.charge * image_rdiff) / (image_mag if image_mag != 0 else 0.0001)
+                if dielectricregions[pointCharge_i].permittivity == 0:
+                    field += Position((0,0))
+                else:
+                    other_region_i = 1 - testpoint_i # suuuuuuper hacky
+                    image=PointCharge(dielectricregions[1].imagePosition(pointCharge.position), dielectricregions[testpoint_i].imageCharge(dielectricregions[other_region_i],pointCharge) )
+                    image_rdiff = (testpoint - image.position)
+                    image_mag = math.pow((testpoint - image.position).magsquared(), 3 / 2)
+                    field += dielectricregions[testpoint_i].k * (pointCharge.charge * rdiff) / (mag if mag != 0 else 0.0001)
+                    field += dielectricregions[testpoint_i].k * (image.charge * image_rdiff) / (image_mag if image_mag != 0 else 0.0001)
             else:
-                field += dielectricregions[testpoint_i].k * (dielectricregions[testpoint_i].screenedCharge(dielectricregions[pointCharge_i], pointCharge) * rdiff) / (mag if mag != 0 else 0.0001)
+                if dielectricregions[testpoint_i].permittivity == 0 or dielectricregions[pointCharge_i].permittivity == 0:
+                    field += Position((0, 0))
+                else:
+                    field += dielectricregions[testpoint_i].k * (dielectricregions[testpoint_i].screenedCharge(dielectricregions[pointCharge_i], pointCharge) * rdiff) / (mag if mag != 0 else 0.0001)
         return field
 
         
@@ -354,7 +360,7 @@ def nextEFLPoints(efl):
     if efl[-1].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(efl[-1],
                                                                                                          pointCharges):
         efl.append(getNextPointAlongEFLUsingField(pointCharges,dielectricRegions, efl[-1]))
-        if len(efl)>2 and (efl[-1].isCloseEnoughTo(efl[-2], spaceresolution / 10) or efl[-1].isCloseEnoughTo(efl[-3], spaceresolution / 10)):
+        if len(efl)>2 and ( efl[-1].isCloseEnoughTo(efl[-2], spaceresolution / 10) or efl[-1].isCloseEnoughTo(efl[-3], spaceresolution / 10) ):
             efl.append(Position((display_width + 1, display_height + 1))) # hack in a way to stop the calculations if the field is really zero at a point. this appends a position outside the screen, so no more will be added.
             #print("hacked!")
         else:
