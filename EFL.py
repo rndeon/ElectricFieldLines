@@ -25,6 +25,7 @@ black = (0,0,0)
 white = (255,255,255)
 dullgrey = (100,100,100)
 grey = (200,200,200)
+lightgrey= (225,225,225)
 red = (255,0,0)
 green = (0,255,0)
 dullgreen= (0,175,0)
@@ -120,8 +121,7 @@ class DielectricRegion(object):
             polygonpoints.append((0,0)) #back to start
         self.polygon = polygonpoints
         #draw this shape
-        regioncolour = 100 * Position((255, 245, 210)) / (100 + self.permittivity)
-        pygame.draw.polygon(screen, regioncolour.get_tuple(),self.polygon,0 )
+        pygame.draw.polygon(screen, self.region_colour(),self.polygon,0 )
 
 
     def isInsideRegion(self,point):
@@ -136,17 +136,30 @@ class DielectricRegion(object):
             return (point[1] <= self.slope * point[0] + self.intercept) 
 
     def set_perm(self,permittivity):
-        if permittivity > 0:
-            self.permittivity = permittivity
+        self.permittivity = permittivity
+        if not permittivity == 0: # in this 0 will indicate a conductor
             self.k = 1 / self.permittivity
+        #else:
+        #    self.permittivity = 1
+        #    self.k = 1
+
+    def region_colour(self): # pin region colour to the value of its permittivity, darker = higher epsilon
+        if self.permittivity == 0:
+            return lightgrey
+        elif self.permittivity > 0:
+            return (100 * Position((255, 245, 210)) / (100 + self.permittivity)).get_tuple()
         else:
-            self.permittivity = 1
-            self.k = 1
+            return (100 * Position((210, 245, 255)) / (100 - self.permittivity)).get_tuple()
+
+    def permittivity_text(self):
+        if self.permittivity == 0:
+            return "conductor"
+        else:
+            return "ε = %s" % self.permittivity
+
 
     def draw(self):
-        # pin region colour to the value of its permittivity, darker = higher epsilon
-        regioncolour = 100 * Position((255, 245, 210)) / (100 + self.permittivity)
-        pygame.draw.polygon(screen, regioncolour.get_tuple(),self.polygon,0)
+        pygame.draw.polygon(screen, self.region_colour(),self.polygon,0)
         if not( self.slope==0 and self.intercept ==0 and self.x_intercept==0): #then the region doesn't fill the whole screen, so we should draw something at the interface
             firstpoint = (0,0)
             secondpoint = (0,0)
@@ -183,10 +196,18 @@ class DielectricRegion(object):
             return Position((2*d - point[0],2*d*self.slope - point[1] + 2* self.intercept ))
     def imageCharge(self,other_region, point_charge):
         # the value of the image charge (located in other_region), felt from this region
-        return -(other_region.permittivity -self.permittivity ) * point_charge.charge/(self.permittivity + other_region.permittivity)
+        if other_region.permittivity==0: # indicates conductor here
+            return - point_charge.charge
+        elif other_region.permittivity== - self.permittivity: # avoid div/0
+            return 0 # but this isn't really accurate, need to fix
+        else:
+            return -(other_region.permittivity - self.permittivity )/(self.permittivity + other_region.permittivity) * point_charge.charge
     def screenedCharge(self,other_region, point_charge):
         # the value of the point charge (located in other_region) felt from this region
-        return 2 * self.permittivity  * point_charge.charge / ( self.permittivity + other_region.permittivity)
+        if other_region.permittivity== - self.permittivity: # avoid div/0
+            return 0 # but this isn't really accurate, need to fix
+        else:
+            return 2 * self.permittivity  * point_charge.charge / ( self.permittivity + other_region.permittivity)
 
 
 def degreesToRadians(deg):
@@ -466,7 +487,7 @@ pointCharges = [PointCharge(Position((300,300))), PointCharge(Position((300, 400
 dielectricRegions = [DielectricRegion(0,0,1) , # this is the full screen, don't remove this one.
                      #   DielectricRegion( 0, 0 , 15,EFLsurface.get_size()[1]/3) # vertical region
                      #DielectricRegion( -EFLsurface.get_size()[1]/EFLsurface.get_size()[0], EFLsurface.get_size()[1]/2 , 15) # angled region
-                     DielectricRegion(-EFLsurface.get_size()[1] / EFLsurface.get_size()[0] / 2, EFLsurface.get_size()[1] +50, 15) # larger angled region
+                     DielectricRegion(-EFLsurface.get_size()[1] / EFLsurface.get_size()[0] / 2, EFLsurface.get_size()[1] +50, -15) # larger angled region
                      ]
                     # first region fills screen, later regions are defined above and to the left of their interface line
 
@@ -559,7 +580,7 @@ while True:
             20 / spaceresolution)  # Position([z * 10 for z in (nextPoint - mousePoint)])
             drawArrow(screen, green, curr_int.mousePoint.get_tuple(), gradientarrowPoint.get_tuple(), 3)
         elif curr_int.currentMode == ClickModes.dielectric: # displays the permittivity right at the mouse cursor
-            isInAnyRegion(curr_int.mousePoint,dielectricRegions ,action=lambda region: display_at_mouse("ε = %s" % region.permittivity))
+            isInAnyRegion(curr_int.mousePoint,dielectricRegions ,action=lambda region: display_at_mouse(region.permittivity_text()))
     curr_int.prevMousePoint = curr_int.mousePoint
 
     # Draw charges
