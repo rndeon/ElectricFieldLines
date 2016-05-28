@@ -345,7 +345,7 @@ def traceEFL(efl):
                                                                                                             pointCharges):
         efl.append(getNextPointAlongEFLUsingField(pointCharges, dielectricRegions, efl[-1]))
         # print("next point is: %s" % (elf[-1],) )
-    ##follow ELF backwards until it hits a charge or leaves the screen
+    ##follow EFL backwards until it hits a charge or leaves the screen
     while efl[0].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(efl[0],
                                                                                                            pointCharges):
         efl.insert(0, getUphillPointAlongEFLUsingField(pointCharges, dielectricRegions, efl[0]))
@@ -539,10 +539,10 @@ while True:
     for region in dielectricRegions:
         region.draw()
 
-    # Calculate ELFs
+    # Calculate EFLs
     for efl in efls:
         drawnew = nextEFLPoints(efl)
-        # Draw ELFs
+        # Draw EFLs
         if drawnew[0]:
             pygame.draw.line(EFLsurface, black, efl[0].get_tuple(), efl[0].get_tuple(), 1)
         if drawnew[1]:
