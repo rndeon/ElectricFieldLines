@@ -69,6 +69,7 @@ class Position(object): #probably poorly named, it really functions as 2D vector
         self.tuple = tuple(x1 + x2 for x1, x2 in zip(self, amount))
 
 class PointCharge(object):
+
     def __init__(self, position, charge=1 ):
         self.position = position
         self.charge=charge
@@ -134,6 +135,7 @@ class DielectricRegion(object):
             # since region is defined as the area above a line (and in these coordinates, 'above' means less than),
             # we calculate what the line's y value is at the desired point's x value, and see if the point's y is less than the line's y
             return (point[1] <= self.slope * point[0] + self.intercept) 
+
 
     def set_perm(self,permittivity):
         self.permittivity = permittivity
@@ -337,16 +339,16 @@ def getUphillPointAlongEFLUsingField(pointcharges,dielectricregions, testpoint):
     return Position(nextPoint)
 
 #this function gets the whole EFL in one shot, which can be annoyingly slow in a interactive program
-def traceEFL(elf):
+def traceEFL(efl):
     global dielectricRegions
-    while elf[-1].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(elf[-1],
+    while efl[-1].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(efl[-1],
                                                                                                             pointCharges):
-        elf.append(getNextPointAlongEFLUsingField(pointCharges,dielectricRegions, elf[-1]))
+        efl.append(getNextPointAlongEFLUsingField(pointCharges, dielectricRegions, efl[-1]))
         # print("next point is: %s" % (elf[-1],) )
     ##follow ELF backwards until it hits a charge or leaves the screen
-    while elf[0].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(elf[0],
+    while efl[0].isBetween(EFLsurface.get_abs_offset(), EFLsurface.get_size()) and not isOnAnyPointCharges(efl[0],
                                                                                                            pointCharges):
-        elf.insert(0, getUphillPointAlongEFLUsingField(pointCharges,dielectricRegions, elf[0]))
+        efl.insert(0, getUphillPointAlongEFLUsingField(pointCharges, dielectricRegions, efl[0]))
         # print("next point is: %s" % (elf[0],))
 
 #so this function just adds one point on either end of an existing field line, so it can be called intermittently
@@ -419,6 +421,8 @@ class Button:
         self.wasclicked = False # so the button can change colour briefly
         self.clickcountdown=0
 
+    #def mouseOver(self, mouse_pos):
+        #nothing
     def click(self,mouseclick):
         self.wasclicked = mouseclick.isBetween(self.position, self.position + self.size)
         if self.wasclicked and self.action != None:
@@ -471,6 +475,42 @@ class MouseInteractor:
     def set_mode(self,mode):
         self.currentMode = mode
 
+
+# #testing my between function
+# print("%s" % (pointCharges[0].position.isBetween((100,300),(400,300) ),))
+# print("%s" % (pointCharges[0].position.isBetween((100,100),(400,400) ),))
+# print("%s" % (pointCharges[0].position.isBetween((400,400),(0,0) ),))
+# print("%s" % (pointCharges[0].position.isBetween((100,400),(300,200) ),))
+# print("%s" % (pointCharges[0].position.isBetween((00,00),(8000,800) ),))
+# print("%s" % (pointCharges[0].position.isBetween((100,500),(400,500) ),))
+# print("%s" % (pointCharges[0].position.isBetween((400,100),(400,300) ),))
+# print("%s" % (pointCharges[0].position.isBetween((0,100),(200,300) ),))
+# print("%s" % (pointCharges[0].position.isBetween((0,100),(200,30) ),))
+# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((100,100)),1), )  )
+# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((100.5,100.5)),1), )  )
+# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((101,100.5)),1), )  )
+# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((101,99)),1), )  )
+# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((99.5,99.5)),1), )  )
+# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((99,98.9)),1), )  )
+# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((100.99,98.9)),1), )  )
+# print("%s" % (Position((100,100)).isCloseEnoughTo(Position((101,101.1)),1), )  )
+
+#globals and such
+black = (0,0,0)
+white = (255,255,255)
+dullgrey = (100,100,100)
+grey = (200,200,200)
+red = (255,0,0)
+green = (0,255,0)
+dullgreen= (0,175,0)
+blue = (0,0,255)
+lightblue=(200,200,255)
+darkblue=(0,0,100)
+lightred=(255,200,200)
+darkred=(100,0,0)
+yellow=(200,100,0)
+dullyellow=(100,50,0)
+
 class ClickModes:
     addCharge, fieldline, dielectric = range(3)
 
@@ -500,13 +540,13 @@ while True:
         region.draw()
 
     # Calculate ELFs
-    for elf in efls:
-        drawnew = nextEFLPoints(elf)
+    for efl in efls:
+        drawnew = nextEFLPoints(efl)
         # Draw ELFs
         if drawnew[0]:
-            pygame.draw.line(EFLsurface, black, elf[0].get_tuple(), elf[0].get_tuple(), 1)
+            pygame.draw.line(EFLsurface, black, efl[0].get_tuple(), efl[0].get_tuple(), 1)
         if drawnew[1]:
-            pygame.draw.line(EFLsurface, black, elf[-1].get_tuple(), elf[-1].get_tuple(), 1)
+            pygame.draw.line(EFLsurface, black, efl[-1].get_tuple(), efl[-1].get_tuple(), 1)
 
     screen.blit(HUD, (0, display_height - Hudsize))
     screen.blit(EFLsurface, (0, 0))  # screen.fill((255, 245, 210))
@@ -594,6 +634,9 @@ while True:
     for button in buttons:
         button.draw()
 
+    #message_display("%.3g" % V, mousePoint + (0, -10))
+    #screen.blit(background, (0, 0))
     pygame.display.update()
 
+    #pygame.quit(); sys.exit()
     
